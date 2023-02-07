@@ -781,7 +781,8 @@ private:
                                                           std::map<std::string, VulkanHppGenerator::CommandData>::const_iterator constructorIt,
                                                           bool                                                                   nonConstPointerAsNullptr,
                                                           std::set<size_t> const &                                               singularParams,
-                                                          bool allocatorIsMemberVariable ) const;
+                                                          bool allocatorIsMemberVariable,
+                                                          bool handleParamsAreMembers ) const;
   std::string generateRAIIHandleConstructorEnumerate( std::pair<std::string, HandleData> const &         handle,
                                                       std::map<std::string, CommandData>::const_iterator constructorIt,
                                                       std::vector<ParamData>::const_iterator             handleParamIt,
@@ -820,6 +821,45 @@ private:
                                                                                        std::map<std::string, CommandData>::const_iterator constructorIt,
                                                                                        std::string const &                                enter,
                                                                                        std::string const &                                leave ) const;
+  std::pair<std::string, std::string> generateRAIIHandleStaticCreate( std::pair<std::string, HandleData> const &         handle,
+                                                                      std::map<std::string, CommandData>::const_iterator constructorIt,
+                                                                      std::string const &                                enter,
+                                                                      std::string const &                                leave ) const;
+  std::pair<std::string, std::string> generateRAIIHandleStaticCreate1Return2Vector( std::pair<std::string, HandleData> const &         handle,
+                                                                                    std::map<std::string, CommandData>::const_iterator constructorIt,
+                                                                                    std::string const &                                enter,
+                                                                                    std::string const &                                leave,
+                                                                                    size_t                                             returnParam,
+                                                                                    std::map<size_t, VectorParamData> const & vectorParamIndices ) const;
+  std::pair<std::string, std::string> generateRAIIHandleStaticCreates( std::pair<std::string, HandleData> const & handle ) const;
+  std::string generateRAIIHandleStaticCreateEnumerate( std::pair<std::string, HandleData> const &         handle,
+                                                       std::map<std::string, CommandData>::const_iterator constructorIt,
+                                                       std::vector<ParamData>::const_iterator             handleParamIt,
+                                                       std::vector<ParamData>::const_iterator             lenParamIt,
+                                                       std::string const &                                enter,
+                                                       std::string const &                                leave ) const;
+  std::pair<std::string, std::string> generateRAIIHandleStaticCreateResult( std::pair<std::string, HandleData> const &         handle,
+                                                                            std::map<std::string, CommandData>::const_iterator constructorIt,
+                                                                            std::string const &                                enter,
+                                                                            std::string const &                                leave ) const;
+  std::string generateRAIIHandleStaticCreateResultSingleSuccessWithErrors1Return0Vector( std::pair<std::string, HandleData> const &         handle,
+                                                                                         std::map<std::string, CommandData>::const_iterator constructorIt,
+                                                                                         std::string const &                                enter,
+                                                                                         std::string const &                                leave ) const;
+  std::string generateRAIIHandleStaticCreateVector( std::pair<std::string, HandleData> const &         handle,
+                                                    std::map<std::string, CommandData>::const_iterator constructorIt,
+                                                    std::vector<ParamData>::const_iterator             handleParamIt,
+                                                    std::string const &                                enter,
+                                                    std::string const &                                leave ) const;
+  std::string generateRAIIHandleStaticCreateVectorSingular( std::pair<std::string, HandleData> const &         handle,
+                                                            std::map<std::string, CommandData>::const_iterator constructorIt,
+                                                            std::vector<ParamData>::const_iterator             handleParamIt,
+                                                            std::string const &                                enter,
+                                                            std::string const &                                leave ) const;
+  std::string generateRAIIHandleStaticCreateToConstructorArgument( ParamData const & param,
+                                                                   bool singular ) const;
+  std::string generateRAIIHandleStaticCreateToConstructorArguments( std::pair<std::string, HandleData> const & handle,
+                                                                    std::map<std::string, VulkanHppGenerator::CommandData>::const_iterator constructorIt ) const;
   std::string generateRAIIHandleContext( std::pair<std::string, HandleData> const & handle, std::set<std::string> const & specialFunctions ) const;
   std::string generateRAIIHandleDestructorCallArguments( std::string const &                                handleType,
                                                          std::map<std::string, CommandData>::const_iterator destructorIt ) const;
