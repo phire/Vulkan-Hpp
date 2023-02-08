@@ -6738,20 +6738,33 @@ std::string VulkanHppGenerator::generateRAIIHandleCommandFactory( std::string co
   debugHelper = "/*" + std::string(__FUNCTION__) + "*/";
   #endif
 
+  bool can_fail = !commandData.successCodes.empty();
+
   if ( definition )
   {
     std::string callArguments = generateCallArgumentsRAIIFactory( commandData.params, initialSkipCount, skippedParams, singularParams );
     std::string className     = initialSkipCount ? stripPrefix( commandData.params[initialSkipCount - 1].type.type, "Vk" ) : "Context";
 
-    std::string const definitionTemplate =
-      R"(
-#ifndef VULKAN_HPP_NO_EXCEPTIONS
+    std::string definitionTemplate = R"(
   VULKAN_HPP_NODISCARD VULKAN_HPP_INLINE ${returnType} ${className}::${commandName}( ${argumentList} ) const ${debugHelper}
   {
     return ${handleType}( ${callArguments} );
   }
+)";
+
+    if (can_fail)
+    {
+      definitionTemplate = R"(
+#ifndef VULKAN_HPP_NO_EXCEPTIONS)" + definitionTemplate + R"(#else
+  VULKAN_HPP_NODISCARD VULKAN_HPP_INLINE
+  VULKAN_HPP_RAII_EXPECTED_CLASS<${returnType}, VULKAN_HPP_NAMESPACE::Result>
+    ${className}::${commandName}( ${argumentList} ) const ${debugHelper}
+  {
+    return ${handleType}::create( ${callArguments} );
+  }
 #endif
 )";
+    }
 
     return replaceWithMap( definitionTemplate,
                            { { "argumentList", argumentList },
@@ -6764,12 +6777,21 @@ std::string VulkanHppGenerator::generateRAIIHandleCommandFactory( std::string co
   }
   else
   {
-    std::string const declarationTemplate =
+    std::string declarationTemplate =
       R"(
-#ifndef VULKAN_HPP_NO_EXCEPTIONS
   VULKAN_HPP_NODISCARD ${returnType} ${commandName}( ${argumentList} ) const; ${debugHelper}
+)";
+
+    if (can_fail)
+    {
+      declarationTemplate = R"(
+#ifndef VULKAN_HPP_NO_EXCEPTIONS)" + declarationTemplate + R"(
+#else
+  VULKAN_HPP_NODISCARD VULKAN_HPP_RAII_EXPECTED_CLASS<${returnType}, VULKAN_HPP_NAMESPACE::Result>
+    ${commandName}( ${argumentList} ) const; ${debugHelper}
 #endif
 )";
+    }
 
     return replaceWithMap( declarationTemplate,
                            { { "argumentList", argumentList },
