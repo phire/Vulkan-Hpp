@@ -391,9 +391,6 @@ void VulkanHppGenerator::generateVulkanRAIIHppFile() const
 #include <utility>  // std::exchange, std::forward
 #include <vulkan/vulkan.hpp>
 
-#include <android-base/expected.h>
-#include <android-base/logging.h>
-
 #if !defined( VULKAN_HPP_RAII_NAMESPACE )
 #  define VULKAN_HPP_RAII_NAMESPACE raii
 #endif
@@ -7189,7 +7186,7 @@ std::string VulkanHppGenerator::generateRAIIHandleStaticCreateEnumerate( std::pa
   const std::string constructorTemplate =
     R"(
 ${enter}
-    static android::base::expected<${handleType}s, VULKAN_HPP_NAMESPACE::Result> create( ${constructorArguments} ) ${debugHelper}
+    static VULKAN_HPP_RAII_EXPECTED_CLASS<${handleType}s, VULKAN_HPP_NAMESPACE::Result> create( ${constructorArguments} ) ${debugHelper}
     {
       ${dispatcherType} const * dispatcher = ${parentName}.getDispatcher();
       std::vector<${vectorElementType}> ${vectorName};
@@ -7206,7 +7203,7 @@ ${enter}
       } while ( result == VULKAN_HPP_NAMESPACE::Result::eIncomplete );
       if ( result != VULKAN_HPP_NAMESPACE::Result::eSuccess )
       {
-        return android::base::unexpected(result);
+        return VULKAN_HPP_RAII_UNEXPECTED(${handleType}s, result);
       }
       ${handleType}s ret(nullptr);
       ret.reserve( ${counterName} );
@@ -7214,7 +7211,7 @@ ${enter}
       {
         ret.emplace_back( ${parentName}, ${handleConstructorArguments} );
       }
-      return std::move(ret);
+      return VULKAN_HPP_RAII_EXPECTED( std::move(ret) );
     }
 ${leave})";
 
@@ -7744,16 +7741,16 @@ std::string VulkanHppGenerator::generateRAIIHandleStaticCreateResultSingleSucces
   const std::string constructorTemplate =
     R"(
 ${enter}
-    static android::base::expected<${handleType}, VULKAN_HPP_NAMESPACE::Result> create( ${staticCreateArguments} ) ${debugHelper}
+    static VULKAN_HPP_RAII_EXPECTED_CLASS<${handleType}, VULKAN_HPP_NAMESPACE::Result> create( ${staticCreateArguments} ) ${debugHelper}
     {
       ${localParamType} ${localParamName};
       VULKAN_HPP_NAMESPACE::Result result = static_cast<VULKAN_HPP_NAMESPACE::Result>( ${getDispatcher}->${constructorCall}( ${callArguments} ) );
       if ( ${failureCheck} )
       {
-        return android::base::unexpected(result);
+        return VULKAN_HPP_RAII_UNEXPECTED(${handleType}, result);
       }
 
-      return VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::${handleType}(${callConstructorArguments});
+      return VULKAN_HPP_RAII_EXPECTED(VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::${handleType}(${callConstructorArguments}));
     }
 ${leave})";
 
@@ -7933,7 +7930,7 @@ std::string VulkanHppGenerator::generateRAIIHandleStaticCreateVector( std::pair<
   const std::string constructorTemplate =
     R"(
 ${enter}
-    static android::base::expected<${handleType}s, VULKAN_HPP_NAMESPACE::Result> create( ${staticCreateArguments} ) ${debugHelper}
+    static VULKAN_HPP_RAII_EXPECTED_CLASS<${handleType}s, VULKAN_HPP_NAMESPACE::Result> create( ${staticCreateArguments} ) ${debugHelper}
     {
       VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::DeviceDispatcher const * dispatcher = ${parentName}.getDispatcher();
       std::vector<${vectorElementType}> ${vectorName}( ${vectorSize} );
@@ -7946,11 +7943,11 @@ ${enter}
         {
           ret.emplace_back( ${parentName}, ${handleConstructorArguments}${successCodePassToElement} );
         }
-        return std::move(ret);
+        return VULKAN_HPP_RAII_EXPECTED(std::move(ret));
       }
       else
       {
-        return android::base::unexpected(result);
+        return VULKAN_HPP_RAII_UNEXPECTED(${handleType}s, result);
       }
     }
 ${leave})";
@@ -8089,15 +8086,15 @@ std::string
   const std::string singularConstructorTemplate =
     R"(
 ${enter}
-    static android::base::expected<${handleType}, VULKAN_HPP_NAMESPACE::Result> create( ${staticCreateArguments} ) ${debugHelper}
+    static VULKAN_HPP_RAII_EXPECTED_CLASS<${handleType}, VULKAN_HPP_NAMESPACE::Result> create( ${staticCreateArguments} ) ${debugHelper}
     {
       ${localParamType} ${localParamName};
       VULKAN_HPP_NAMESPACE::Result result = static_cast<VULKAN_HPP_NAMESPACE::Result>( ${getDispatcher}->${constructorCall}( ${callArguments} ) );
       if ( ${failureCheck} )
       {
-        return android::base::unexpected(result);
+        return VULKAN_HPP_RAII_UNEXPECTED(${handleType}, result);
       }
-      return VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::${handleType}(${callConstructorArguments});
+      return VULKAN_HPP_RAII_EXPECTED(VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::${handleType}(${callConstructorArguments}));
     }
 ${leave})";
 
@@ -8631,7 +8628,7 @@ std::string VulkanHppGenerator::generateRAIIHandleVectorSizeCheck( std::string c
     #ifndef VULKAN_HPP_NO_EXCEPTIONS
     throw LogicError( VULKAN_HPP_NAMESPACE_STRING "::${className}::${commandName}: ${firstVectorName}.size() != ${secondVectorName}.size()" );
     #else
-    LOG(FATAL) << VULKAN_HPP_NAMESPACE_STRING "::${className}::${commandName}: ${firstVectorName}.size() != ${secondVectorName}.size()";
+    VULKAN_HPP_ASSERT (false);
     #endif
   })#";
 
@@ -8641,7 +8638,7 @@ std::string VulkanHppGenerator::generateRAIIHandleVectorSizeCheck( std::string c
     #ifndef VULKAN_HPP_NO_EXCEPTIONS
     throw LogicError( VULKAN_HPP_NAMESPACE_STRING "::${className}::${commandName}: ${firstVectorName}.size() * sizeof( ${firstDataType} ) != ${secondVectorName}.size() * sizeof( ${secondDataType} )" );
     #else
-    LOG(FATAL) << VULKAN_HPP_NAMESPACE_STRING "::${className}::${commandName}: ${firstVectorName}.size() * sizeof( ${firstDataType} ) != ${secondVectorName}.size() * sizeof( ${secondDataType} )";
+    VULKAN_HPP_ASSERT (false);
     #endif
   })#";
 
@@ -8650,7 +8647,7 @@ std::string VulkanHppGenerator::generateRAIIHandleVectorSizeCheck( std::string c
       #ifndef VULKAN_HPP_NO_EXCEPTIONS
       throw LogicError( VULKAN_HPP_NAMESPACE_STRING "::${className}::${commandName}: ${vectorName}.size() != ${sizeValue}" );
       #else
-      LOG(FATAL) << VULKAN_HPP_NAMESPACE_STRING "::${className}::${commandName}: ${vectorName}.size() != ${sizeValue}";
+      VULKAN_HPP_ASSERT (false);
       #endif
     })#";
 
