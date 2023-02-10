@@ -319,6 +319,8 @@ namespace VULKAN_HPP_NAMESPACE
 ${Exceptions}
 ${resultExceptions}
 ${throwResultException}
+#else
+${Expected}
 #endif
 
 ${ResultValue}
@@ -356,6 +358,7 @@ ${DispatchLoaderDynamic}
                                       { "DispatchLoaderStatic", generateDispatchLoaderStatic() },
                                       { "DynamicLoader", readSnippet( "DynamicLoader.hpp" ) },
                                       { "Exceptions", readSnippet( "Exceptions.hpp" ) },
+                                      { "Expected", readSnippet( "Expected.hpp" )},
                                       { "Flags", readSnippet( "Flags.hpp" ) },
                                       { "headerVersion", m_version },
                                       { "includes", readSnippet( "includes.hpp" ) },
@@ -6757,7 +6760,7 @@ std::string VulkanHppGenerator::generateRAIIHandleCommandFactory( std::string co
       definitionTemplate = R"(
 #ifndef VULKAN_HPP_NO_EXCEPTIONS)" + definitionTemplate + R"(#else
   VULKAN_HPP_NODISCARD VULKAN_HPP_INLINE
-  VULKAN_HPP_RAII_EXPECTED_CLASS<${returnType}, VULKAN_HPP_NAMESPACE::Result>
+  VULKAN_HPP_NAMESPACE::Expected<${returnType}>
     ${className}::${commandName}( ${argumentList} ) const ${debugHelper}
   {
     return ${handleType}::create( ${callArguments} );
@@ -6787,7 +6790,7 @@ std::string VulkanHppGenerator::generateRAIIHandleCommandFactory( std::string co
       declarationTemplate = R"(
 #ifndef VULKAN_HPP_NO_EXCEPTIONS)" + declarationTemplate + R"(
 #else
-  VULKAN_HPP_NODISCARD VULKAN_HPP_RAII_EXPECTED_CLASS<${returnType}, VULKAN_HPP_NAMESPACE::Result>
+  VULKAN_HPP_NODISCARD VULKAN_HPP_NAMESPACE::Expected<${returnType}>
     ${commandName}( ${argumentList} ) const; ${debugHelper}
 #endif
 )";
@@ -7208,7 +7211,7 @@ std::string VulkanHppGenerator::generateRAIIHandleStaticCreateEnumerate( std::pa
   const std::string constructorTemplate =
     R"(
 ${enter}
-    static VULKAN_HPP_RAII_EXPECTED_CLASS<${handleType}s, VULKAN_HPP_NAMESPACE::Result> create( ${constructorArguments} ) ${debugHelper}
+    static VULKAN_HPP_NAMESPACE::Expected<${handleType}s> create( ${constructorArguments} ) ${debugHelper}
     {
       ${dispatcherType} const * dispatcher = ${parentName}.getDispatcher();
       std::vector<${vectorElementType}> ${vectorName};
@@ -7225,7 +7228,7 @@ ${enter}
       } while ( result == VULKAN_HPP_NAMESPACE::Result::eIncomplete );
       if ( result != VULKAN_HPP_NAMESPACE::Result::eSuccess )
       {
-        return VULKAN_HPP_RAII_UNEXPECTED(${handleType}s, result);
+        return VULKAN_HPP_NAMESPACE::Unexpected(result);
       }
       ${handleType}s ret(nullptr);
       ret.reserve( ${counterName} );
@@ -7233,7 +7236,7 @@ ${enter}
       {
         ret.emplace_back( ${parentName}, ${handleConstructorArguments} );
       }
-      return VULKAN_HPP_RAII_EXPECTED( std::move(ret) );
+      return VULKAN_HPP_NAMESPACE::Expected( std::move(ret) );
     }
 ${leave})";
 
@@ -7763,16 +7766,15 @@ std::string VulkanHppGenerator::generateRAIIHandleStaticCreateResultSingleSucces
   const std::string constructorTemplate =
     R"(
 ${enter}
-    static VULKAN_HPP_RAII_EXPECTED_CLASS<${handleType}, VULKAN_HPP_NAMESPACE::Result> create( ${staticCreateArguments} ) ${debugHelper}
+    static VULKAN_HPP_NAMESPACE::Expected<${handleType}> create( ${staticCreateArguments} ) ${debugHelper}
     {
       ${localParamType} ${localParamName};
       VULKAN_HPP_NAMESPACE::Result result = static_cast<VULKAN_HPP_NAMESPACE::Result>( ${getDispatcher}->${constructorCall}( ${callArguments} ) );
       if ( ${failureCheck} )
       {
-        return VULKAN_HPP_RAII_UNEXPECTED(${handleType}, result);
+        return VULKAN_HPP_NAMESPACE::Unexpected(result);
       }
-
-      return VULKAN_HPP_RAII_EXPECTED(VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::${handleType}(${callConstructorArguments}));
+      return VULKAN_HPP_NAMESPACE::Expected<${handleType}>(VULKAN_HPP_IN_PLACE(), ${callConstructorArguments});
     }
 ${leave})";
 
@@ -7952,7 +7954,7 @@ std::string VulkanHppGenerator::generateRAIIHandleStaticCreateVector( std::pair<
   const std::string constructorTemplate =
     R"(
 ${enter}
-    static VULKAN_HPP_RAII_EXPECTED_CLASS<${handleType}s, VULKAN_HPP_NAMESPACE::Result> create( ${staticCreateArguments} ) ${debugHelper}
+    static VULKAN_HPP_NAMESPACE::Expected<${handleType}s> create( ${staticCreateArguments} ) ${debugHelper}
     {
       VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::DeviceDispatcher const * dispatcher = ${parentName}.getDispatcher();
       std::vector<${vectorElementType}> ${vectorName}( ${vectorSize} );
@@ -7965,11 +7967,11 @@ ${enter}
         {
           ret.emplace_back( ${parentName}, ${handleConstructorArguments}${successCodePassToElement} );
         }
-        return VULKAN_HPP_RAII_EXPECTED(std::move(ret));
+        return VULKAN_HPP_NAMESPACE::Expected(std::move(ret));
       }
       else
       {
-        return VULKAN_HPP_RAII_UNEXPECTED(${handleType}s, result);
+        return VULKAN_HPP_NAMESPACE::Unexpected(result);
       }
     }
 ${leave})";
@@ -8108,15 +8110,15 @@ std::string
   const std::string singularConstructorTemplate =
     R"(
 ${enter}
-    static VULKAN_HPP_RAII_EXPECTED_CLASS<${handleType}, VULKAN_HPP_NAMESPACE::Result> create( ${staticCreateArguments} ) ${debugHelper}
+    static VULKAN_HPP_NAMESPACE::Expected<${handleType}> create( ${staticCreateArguments} ) ${debugHelper}
     {
       ${localParamType} ${localParamName};
       VULKAN_HPP_NAMESPACE::Result result = static_cast<VULKAN_HPP_NAMESPACE::Result>( ${getDispatcher}->${constructorCall}( ${callArguments} ) );
       if ( ${failureCheck} )
       {
-        return VULKAN_HPP_RAII_UNEXPECTED(${handleType}, result);
+        return VULKAN_HPP_NAMESPACE::Unexpected(result);
       }
-      return VULKAN_HPP_RAII_EXPECTED(VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::${handleType}(${callConstructorArguments}));
+      return VULKAN_HPP_NAMESPACE::Expected<${handleType}>(VULKAN_HPP_IN_PLACE(), ${callConstructorArguments});
     }
 ${leave})";
 
