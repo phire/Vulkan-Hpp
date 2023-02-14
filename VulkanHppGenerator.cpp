@@ -8118,7 +8118,7 @@ ${enter}
       {
         return VULKAN_HPP_NAMESPACE::Unexpected(result);
       }
-      return VULKAN_HPP_NAMESPACE::Expected<${handleType}>(VULKAN_HPP_IN_PLACE(), ${callConstructorArguments});
+      return VULKAN_HPP_NAMESPACE::Expected(std::move( ${handleType}( ${callConstructorArguments} )));
     }
 ${leave})";
 

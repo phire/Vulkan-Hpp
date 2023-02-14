@@ -1,12 +1,4 @@
 
-#if !defined(VULKAN_HPP_IN_PLACE)
-    #if defined(__cpp_lib_optional)
-        #define VULKAN_HPP_IN_PLACE std::in_place_t
-    #else
-        struct in_place_t {};
-        #define VULKAN_HPP_IN_PLACE VULKAN_HPP_NAMESPACE::in_place_t
-    #endif
-#endif
 
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
 
@@ -56,9 +48,6 @@ public:
     }
     VULKAN_HPP_CONSTEXPR Expected(const Unexpected&& u) VULKAN_HPP_NOEXCEPT : has_val(false), result(u.error()) {}
     VULKAN_HPP_CONSTEXPR explicit Expected(T&& v) VULKAN_HPP_NOEXCEPT : val(std::move(v)) {}
-
-    template<class... Args>
-    VULKAN_HPP_CONSTEXPR explicit Expected(VULKAN_HPP_IN_PLACE, Args&&... args) VULKAN_HPP_NOEXCEPT : val(std::forward<Args>(args)...) {}
 
     VULKAN_HPP_CONSTEXPR ~Expected() VULKAN_HPP_NOEXCEPT { if (has_val) val.~T(); }
 
