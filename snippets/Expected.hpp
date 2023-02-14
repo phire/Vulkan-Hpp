@@ -1,6 +1,12 @@
 
+#if !defined(VULKAN_HPP_NO_EXCEPTIONS)
 
-#if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
+// With exceptions, Expected just passes though the type
+template<class T>
+using Expected = T;
+using Unexpected = void;
+
+#elif defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
 
 // Use the C++23 std::expected if it's available
 template<class T>
@@ -117,5 +123,55 @@ template<class T>
 VULKAN_HPP_CONSTEXPR_14 void swap(Expected<T>& x, Expected<T>& y) VULKAN_HPP_NOEXCEPT {
     x.swap(y);
 }
+
+// Specialize for void
+  template <>
+  class Expected<void>
+  {
+  public:
+    using value_type      = void;
+    using error_type      = Result;
+    using unexpected_type = Unexpected;
+
+    // constructors
+    explicit Expected( const Expected & e )                            = delete;
+    VULKAN_HPP_CONSTEXPR Expected( Expected && e ) VULKAN_HPP_NOEXCEPT = default;
+
+    template <class U>
+    VULKAN_HPP_CONSTEXPR Expected( Expected<U> && e )
+    {
+      if ( e.has_val() )
+        result = Result::eSuccess;
+      else
+        result = e.error();
+    }
+
+    VULKAN_HPP_CONSTEXPR Expected( const Unexpected && u ) VULKAN_HPP_NOEXCEPT
+      : result( u.error() )
+    {
+    }
+    // assignment
+    VULKAN_HPP_CONSTEXPR_14 Expected & operator=( Expected && e ) VULKAN_HPP_NOEXCEPT = default;
+
+    // observers
+    VULKAN_HPP_CONSTEXPR bool has_value() const VULKAN_HPP_NOEXCEPT
+    {
+      return Result::eSuccess == result;
+    }
+
+    VULKAN_HPP_CONSTEXPR_14 const Result & error() const VULKAN_HPP_NOEXCEPT
+    {
+      VULKAN_HPP_ASSERT( !has_value() );
+      return result;
+    }
+
+    VULKAN_HPP_CONSTEXPR explicit operator bool() const VULKAN_HPP_NOEXCEPT
+    {
+      return has_value();
+    }
+
+  private:
+      Result result;
+  };
 
 #endif

@@ -773,10 +773,11 @@ private:
                                                                                    std::map<size_t, VectorParamData> const & vectorParamIndices ) const;
   std::pair<std::string, std::string> generateRAIIHandleConstructors( std::pair<std::string, HandleData> const & handle ) const;
   std::string generateRAIIHandleConstructorArgument( ParamData const & param, bool definition, bool singular, bool takesOwnership ) const;
-  std::string generateRAIIHandleConstructorArguments( std::pair<std::string, HandleData> const &                             handle,
-                                                      std::map<std::string, VulkanHppGenerator::CommandData>::const_iterator constructorIt,
-                                                      bool                                                                   singular,
-                                                      bool                                                                   takesOwnership ) const;
+  std::pair<std::string, std::string>
+    generateRAIIHandleConstructorArguments( std::pair<std::string, HandleData> const &                             handle,
+                                            std::map<std::string, VulkanHppGenerator::CommandData>::const_iterator constructorIt,
+                                            bool                                                                   singular,
+                                            bool                                                                   takesOwnership ) const;
   std::string generateRAIIHandleConstructorCallArguments( std::pair<std::string, HandleData> const &                             handle,
                                                           std::map<std::string, VulkanHppGenerator::CommandData>::const_iterator constructorIt,
                                                           bool                                                                   nonConstPointerAsNullptr,
@@ -785,8 +786,6 @@ private:
                                                           bool handleParamsAreMembers ) const;
   std::string generateRAIIHandleConstructorEnumerate( std::pair<std::string, HandleData> const &         handle,
                                                       std::map<std::string, CommandData>::const_iterator constructorIt,
-                                                      std::vector<ParamData>::const_iterator             handleParamIt,
-                                                      std::vector<ParamData>::const_iterator             lenParamIt,
                                                       std::string const &                                enter,
                                                       std::string const &                                leave ) const;
   std::string generateRAIIHandleConstructorInitializationList( std::pair<std::string, HandleData> const &         handle,
@@ -805,12 +804,10 @@ private:
   std::string generateRAIIHandleConstructorTakeOwnership( std::pair<std::string, HandleData> const & handle ) const;
   std::string generateRAIIHandleConstructorVector( std::pair<std::string, HandleData> const &         handle,
                                                    std::map<std::string, CommandData>::const_iterator constructorIt,
-                                                   std::vector<ParamData>::const_iterator             handleParamIt,
                                                    std::string const &                                enter,
                                                    std::string const &                                leave ) const;
   std::string generateRAIIHandleConstructorVectorSingular( std::pair<std::string, HandleData> const &         handle,
                                                            std::map<std::string, CommandData>::const_iterator constructorIt,
-                                                           std::vector<ParamData>::const_iterator             handleParamIt,
                                                            std::string const &                                enter,
                                                            std::string const &                                leave ) const;
   std::pair<std::string, std::string> generateRAIIHandleConstructorVoid( std::pair<std::string, HandleData> const &         handle,

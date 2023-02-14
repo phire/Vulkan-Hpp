@@ -319,9 +319,9 @@ namespace VULKAN_HPP_NAMESPACE
 ${Exceptions}
 ${resultExceptions}
 ${throwResultException}
-#else
-${Expected}
 #endif
+
+${Expected}
 
 ${ResultValue}
 ${resultChecks}
@@ -6730,18 +6730,24 @@ std::string VulkanHppGenerator::generateRAIIHandleCommandFactory( std::string co
   std::string      commandName    = generateCommandName( name, commandData.params, initialSkipCount, m_tags, flavourFlags );
   std::string      handleType     = stripPostfix( commandData.params[returnParams.back()].type.compose( "VULKAN_HPP_RAII_NAMESPACE" ), " *" );
   std::string      returnType     = handleType;
+
   if ( ( vectorParams.find( returnParams.back() ) != vectorParams.end() ) && !singular )
   {
     returnType = "std::vector<" + handleType + ">";
     handleType += "s";
   }
+  std::string factory = handleType;
 
   std::string debugHelper = "";
   #ifdef DEBUG_GENERATOR
   debugHelper = "/*" + std::string(__FUNCTION__) + "*/";
   #endif
 
-  bool can_fail = !commandData.successCodes.empty();
+  if ( !commandData.successCodes.empty() )
+  {
+    returnType = "VULKAN_HPP_NAMESPACE::Expected<" + returnType + ">";
+    factory += "::create";
+  }
 
   if ( definition )
   {
@@ -6751,23 +6757,9 @@ std::string VulkanHppGenerator::generateRAIIHandleCommandFactory( std::string co
     std::string definitionTemplate = R"(
   VULKAN_HPP_NODISCARD VULKAN_HPP_INLINE ${returnType} ${className}::${commandName}( ${argumentList} ) const ${debugHelper}
   {
-    return ${handleType}( ${callArguments} );
+    return ${factory}( ${callArguments} );
   }
 )";
-
-    if (can_fail)
-    {
-      definitionTemplate = R"(
-#ifndef VULKAN_HPP_NO_EXCEPTIONS)" + definitionTemplate + R"(#else
-  VULKAN_HPP_NODISCARD VULKAN_HPP_INLINE
-  VULKAN_HPP_NAMESPACE::Expected<${returnType}>
-    ${className}::${commandName}( ${argumentList} ) const ${debugHelper}
-  {
-    return ${handleType}::create( ${callArguments} );
-  }
-#endif
-)";
-    }
 
     return replaceWithMap( definitionTemplate,
                            { { "argumentList", argumentList },
@@ -6775,26 +6767,14 @@ std::string VulkanHppGenerator::generateRAIIHandleCommandFactory( std::string co
                              { "className", className },
                              { "commandName", commandName },
                              { "debugHelper", debugHelper },
-                             { "handleType", handleType },
+                             { "factory", factory },
                              { "returnType", returnType } } );
   }
   else
   {
-    std::string declarationTemplate =
-      R"(
+    std::string declarationTemplate = R"(
   VULKAN_HPP_NODISCARD ${returnType} ${commandName}( ${argumentList} ) const; ${debugHelper}
 )";
-
-    if (can_fail)
-    {
-      declarationTemplate = R"(
-#ifndef VULKAN_HPP_NO_EXCEPTIONS)" + declarationTemplate + R"(
-#else
-  VULKAN_HPP_NODISCARD VULKAN_HPP_NAMESPACE::Expected<${returnType}>
-    ${commandName}( ${argumentList} ) const; ${debugHelper}
-#endif
-)";
-    }
 
     return replaceWithMap( declarationTemplate,
                            { { "argumentList", argumentList },
@@ -6928,12 +6908,11 @@ std::pair<std::string, std::string>
         {
           std::string singularConstructor;
           auto        lenParamIt    = constructorIt->second.params.begin() + vectorParams.begin()->second.lenParam;
-          auto        handleParamIt = constructorIt->second.params.begin() + std::next( vectorParams.begin() )->first;
           if ( !checkEquivalentSingularConstructor( handle.second.constructorIts, constructorIt, lenParamIt ) )
           {
-            singularConstructor = generateRAIIHandleConstructorVectorSingular( handle, constructorIt, handleParamIt, enter, leave );
+            singularConstructor = generateRAIIHandleConstructorVectorSingular( handle, constructorIt, enter, leave );
           }
-          return std::make_pair( singularConstructor, generateRAIIHandleConstructorVector( handle, constructorIt, handleParamIt, enter, leave ) );
+          return std::make_pair( singularConstructor, generateRAIIHandleConstructorVector( handle, constructorIt, enter, leave ) );
         }
       }
     }
@@ -7056,17 +7035,21 @@ std::string VulkanHppGenerator::generateRAIIHandleConstructorArgument( ParamData
   return argument;
 }
 
-std::string VulkanHppGenerator::generateRAIIHandleConstructorArguments( std::pair<std::string, HandleData> const &                             handle,
-                                                                        std::map<std::string, VulkanHppGenerator::CommandData>::const_iterator constructorIt,
-                                                                        bool                                                                   singular,
-                                                                        bool takesOwnership ) const
+std::pair<std::string, std::string>
+  VulkanHppGenerator::generateRAIIHandleConstructorArguments( std::pair<std::string, HandleData> const &                             handle,
+                                                              std::map<std::string, VulkanHppGenerator::CommandData>::const_iterator constructorIt,
+                                                              bool                                                                   singular,
+                                                              bool takesOwnership ) const
 {
   auto [parentType, parentName] = getParentTypeAndName( handle );
 
   std::string arguments = "VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::" + parentType + " const & " + parentName;
+  std::string forward = parentName;
   if ( takesOwnership )
   {
-    arguments += ", " + handle.first + " " + generateRAIIHandleConstructorParamName( handle.first, handle.second.destructorIt );
+    std::string paramName = generateRAIIHandleConstructorParamName( handle.first, handle.second.destructorIt );
+    forward += ", " + paramName;
+    arguments += ", " + handle.first + " " + paramName;
   }
 
   if ( constructorIt != m_commands.end() )
@@ -7103,10 +7086,18 @@ std::string VulkanHppGenerator::generateRAIIHandleConstructorArguments( std::pai
           continue;
         }
         arguments += ", " + generateRAIIHandleConstructorArgument( param, false, singular, takesOwnership );
+        if ( param.type.isConstPointer() )
+        {
+           forward += ", " + startLowerCase( stripPrefix( param.name, "p" ) );
+        }
+        else
+        {
+          forward += ", param.name";
+        }
       }
     }
   }
-  return arguments;
+  return std::make_pair(arguments, forward);
 }
 
 std::string
@@ -7228,7 +7219,11 @@ ${enter}
       } while ( result == VULKAN_HPP_NAMESPACE::Result::eIncomplete );
       if ( result != VULKAN_HPP_NAMESPACE::Result::eSuccess )
       {
+#ifdef VULKAN_HPP_NO_EXCEPTIONS
         return VULKAN_HPP_NAMESPACE::Unexpected(result);
+#else
+        throwResultException( result, "${constructorCall}" );
+#endif
       }
       ${handleType}s ret(nullptr);
       ret.reserve( ${counterName} );
@@ -7241,7 +7236,7 @@ ${enter}
 ${leave})";
 
   return replaceWithMap( constructorTemplate,
-                         { { "constructorArguments", generateRAIIHandleConstructorArguments( handle, constructorIt, false, false ) },
+                         { { "constructorArguments", generateRAIIHandleConstructorArguments( handle, constructorIt, false, false ).first },
                            { "constructorCall", constructorIt->first },
                            { "counterName", startLowerCase( stripPrefix( lenParamIt->name, "p" ) ) },
                            { "counterType", lenParamIt->type.type },
@@ -7261,68 +7256,28 @@ ${leave})";
 
 std::string VulkanHppGenerator::generateRAIIHandleConstructorEnumerate( std::pair<std::string, HandleData> const &                             handle,
                                                                         std::map<std::string, VulkanHppGenerator::CommandData>::const_iterator constructorIt,
-                                                                        std::vector<ParamData>::const_iterator                                 handleParamIt,
-                                                                        std::vector<ParamData>::const_iterator                                 lenParamIt,
                                                                         std::string const &                                                    enter,
                                                                         std::string const &                                                    leave ) const
 {
-  std::string handleConstructorArguments = generateRAIIHandleSingularConstructorArguments( handle, constructorIt );
   std::string handleType                 = stripPrefix( handle.first, "Vk" );
-  std::string dispatcherType             = hasParentHandle( handle.first, "VkDevice" ) ? "VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::DeviceDispatcher"
-                                                                                       : "VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::InstanceDispatcher";
+  auto [constructorArguments, forwardArguments] = generateRAIIHandleConstructorArguments( handle, constructorIt, false, false );
 
   const std::string constructorTemplate =
     R"(
 ${enter}
 #ifndef VULKAN_HPP_NO_EXCEPTIONS
     ${handleType}s( ${constructorArguments} )
-    {
-      ${dispatcherType} const * dispatcher = ${parentName}.getDispatcher();
-      std::vector<${vectorElementType}> ${vectorName};
-      ${counterType} ${counterName};
-      VULKAN_HPP_NAMESPACE::Result result;
-      do
-      {
-        result = static_cast<VULKAN_HPP_NAMESPACE::Result>( dispatcher->${constructorCall}( ${firstCallArguments} ) );
-        if ( ( result == VULKAN_HPP_NAMESPACE::Result::eSuccess ) && ${counterName} )
-        {
-          ${vectorName}.resize( ${counterName} );
-          result = static_cast<VULKAN_HPP_NAMESPACE::Result>( dispatcher->${constructorCall}( ${secondCallArguments} ) );
-        }
-      } while ( result == VULKAN_HPP_NAMESPACE::Result::eIncomplete );
-      if ( result == VULKAN_HPP_NAMESPACE::Result::eSuccess )
-      {
-        VULKAN_HPP_ASSERT( ${counterName} <= ${vectorName}.size() );
-        this->reserve( ${counterName} );
-        for ( auto const & ${handleName} : ${vectorName} )
-        {
-          this->emplace_back( ${parentName}, ${handleConstructorArguments} );
-        }
-      }
-      else
-      {
-        throwResultException( result, "${constructorCall}" );
-      }
-    }
+      : ${handleType}s( create( ${forwardArguments} ) ) { }
 #endif
 ${leave})";
 
   return replaceWithMap( constructorTemplate,
-                         { { "constructorArguments", generateRAIIHandleConstructorArguments( handle, constructorIt, false, false ) },
-                           { "constructorCall", constructorIt->first },
-                           { "counterName", startLowerCase( stripPrefix( lenParamIt->name, "p" ) ) },
-                           { "counterType", lenParamIt->type.type },
-                           { "dispatcherType", dispatcherType },
+                         { { "constructorArguments", constructorArguments },
+                           { "forwardArguments", forwardArguments },
                            { "enter", enter },
-                           { "firstCallArguments", generateRAIIHandleConstructorCallArguments( handle, constructorIt, true, {}, true, true ) },
-                           { "handleConstructorArguments", handleConstructorArguments },
-                           { "handleName", startLowerCase( handleType ) },
                            { "handleType", handleType },
                            { "leave", leave },
-                           { "parentName", constructorIt->second.params.front().name },
-                           { "secondCallArguments", generateRAIIHandleConstructorCallArguments( handle, constructorIt, false, {}, true, true ) },
-                           { "vectorElementType", handleParamIt->type.type },
-                           { "vectorName", startLowerCase( stripPrefix( handleParamIt->name, "p" ) ) } } );
+                         } );
 }
 
 std::string
@@ -7578,8 +7533,7 @@ std::pair<std::string, std::string> VulkanHppGenerator::generateRAIIHandleConstr
                 if ( isLenByStructMember( constructorIt->second.params[vectorParams.begin()->first].len,
                                           constructorIt->second.params[vectorParams.begin()->second.lenParam] ) )
                 {
-                  auto handleParamIt = constructorIt->second.params.begin() + returnParams[0];
-                  return std::make_pair( "", generateRAIIHandleConstructorVector( handle, constructorIt, handleParamIt, enter, leave ) );
+                  return std::make_pair( "", generateRAIIHandleConstructorVector( handle, constructorIt, enter, leave ) );
                 }
               }
               break;
@@ -7615,9 +7569,7 @@ std::pair<std::string, std::string> VulkanHppGenerator::generateRAIIHandleConstr
                 {
                   assert( returnParams[1] == vectorParams.begin()->first );
                   assert( constructorIt->second.successCodes[1] == "VK_INCOMPLETE" );
-                  auto lenParamIt    = constructorIt->second.params.begin() + returnParams[0];
-                  auto handleParamIt = constructorIt->second.params.begin() + returnParams[1];
-                  return std::make_pair( "", generateRAIIHandleConstructorEnumerate( handle, constructorIt, handleParamIt, lenParamIt, enter, leave ) );
+                  return std::make_pair( "", generateRAIIHandleConstructorEnumerate( handle, constructorIt, enter, leave ) );
                 }
               }
             }
@@ -7749,7 +7701,7 @@ std::string VulkanHppGenerator::generateRAIIHandleStaticCreateResultSingleSucces
 
   std::string getDispatcher = parentName + ".getDispatcher()";
 
-  std::string staticCreateArguments = generateRAIIHandleConstructorArguments( handle, constructorIt, false, false );
+  auto [constructorArguments, forwardArguments] = generateRAIIHandleConstructorArguments( handle, constructorIt, false, false );
 
   std::string callArguments = generateRAIIHandleConstructorCallArguments( handle, constructorIt, false, {}, false, false );
 
@@ -7766,21 +7718,25 @@ std::string VulkanHppGenerator::generateRAIIHandleStaticCreateResultSingleSucces
   const std::string constructorTemplate =
     R"(
 ${enter}
-    static VULKAN_HPP_NAMESPACE::Expected<${handleType}> create( ${staticCreateArguments} ) ${debugHelper}
+    static VULKAN_HPP_NAMESPACE::Expected<${handleType}> create( ${constructorArguments} ) ${debugHelper}
     {
       ${localParamType} ${localParamName};
       VULKAN_HPP_NAMESPACE::Result result = static_cast<VULKAN_HPP_NAMESPACE::Result>( ${getDispatcher}->${constructorCall}( ${callArguments} ) );
       if ( ${failureCheck} )
       {
+#ifdef VULKAN_HPP_NO_EXCEPTIONS
         return VULKAN_HPP_NAMESPACE::Unexpected(result);
+#else
+        throwResultException( result, "${constructorCall}" );
+#endif
       }
-      return VULKAN_HPP_NAMESPACE::Expected<${handleType}>(VULKAN_HPP_IN_PLACE(), ${callConstructorArguments});
+      return VULKAN_HPP_NAMESPACE::Expected(std::move( ${handleType} ( ${callConstructorArguments} )));
     }
 ${leave})";
 
   return replaceWithMap( constructorTemplate,
                          { { "callArguments", callArguments },
-                           { "staticCreateArguments", staticCreateArguments },
+                           { "constructorArguments", constructorArguments },
                            { "callConstructorArguments", callConstructorArguments },
                            { "constructorCall", constructorIt->first },
                            { "debugHelper", debugHelper },
@@ -7799,59 +7755,23 @@ std::string VulkanHppGenerator::generateRAIIHandleConstructorResultSingleSuccess
   std::string const &                                                    enter,
   std::string const &                                                    leave ) const
 {
-  auto [parentType, parentName] = getParentTypeAndName( handle );
-
-  std::string getDispatcher = parentName + ".getDispatcher()";
-  std::string dispatcherInitializer, dispatcherInit;
-  if ( ( handle.first != "VkInstance" ) && ( handle.first != "VkDevice" ) )
-  {
-    dispatcherInitializer = "m_dispatcher( " + getDispatcher + " )";
-  }
-  else
-  {
-    std::string handleType = stripPrefix( handle.first, "Vk" );
-    dispatcherInit         = "\n        m_dispatcher.reset( new VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::" + handleType + "Dispatcher( " + parentName +
-                     ".getDispatcher()->vkGet" + handleType + "ProcAddr, static_cast<" + handle.first + ">( m_" + startLowerCase( handleType ) + " ) ) );";
-  }
-
-  std::string constructorArguments = generateRAIIHandleConstructorArguments( handle, constructorIt, false, false );
-
-  std::string callArguments = generateRAIIHandleConstructorCallArguments( handle, constructorIt, false, {}, handle.second.destructorIt != m_commands.end(), false );
-
-  std::string initializationList = generateRAIIHandleConstructorInitializationList( handle, constructorIt, handle.second.destructorIt, false );
-  if ( !initializationList.empty() && !dispatcherInitializer.empty() )
-  {
-    initializationList += ", ";
-  }
+  auto [constructorArguments, forwardArguments] = generateRAIIHandleConstructorArguments( handle, constructorIt, false, false );
 
   const std::string constructorTemplate =
     R"(
 ${enter}
 #ifndef VULKAN_HPP_NO_EXCEPTIONS
     ${handleType}( ${constructorArguments} )
-      : ${initializationList}${dispatcherInitializer}
-    {
-      VULKAN_HPP_NAMESPACE::Result result = static_cast<VULKAN_HPP_NAMESPACE::Result>( ${getDispatcher}->${constructorCall}( ${callArguments} ) );
-      if ( ${failureCheck} )
-      {
-        throwResultException( result, "${constructorCall}" );
-      }${dispatcherInit}
-    }
+      : ${handleType}( ${handleType}::create( ${forwardArguments} )) {}
 #endif
 ${leave})";
 
   return replaceWithMap( constructorTemplate,
-                         { { "callArguments", callArguments },
-                           { "constructorArguments", constructorArguments },
-                           { "constructorCall", constructorIt->first },
-                           { "dispatcherInitializer", dispatcherInitializer },
-                           { "dispatcherInit", dispatcherInit },
+                         { { "constructorArguments", constructorArguments },
+                           { "forwardArguments", forwardArguments },
                            { "enter", enter },
-                           { "failureCheck", generateFailureCheck( constructorIt->second.successCodes ) },
-                           { "getDispatcher", getDispatcher },
                            { "leave", leave },
-                           { "handleType", stripPrefix( handle.first, "Vk" ) },
-                           { "initializationList", initializationList } } );
+                           { "handleType", stripPrefix( handle.first, "Vk" ) } } );
 }
 
 std::string VulkanHppGenerator::generateRAIIHandleConstructorTakeOwnership( std::pair<std::string, HandleData> const & handle ) const
@@ -7861,7 +7781,7 @@ std::string VulkanHppGenerator::generateRAIIHandleConstructorTakeOwnership( std:
 
   auto [parentType, parentName] = getParentTypeAndName( handle );
 
-  std::string constructorArguments = generateRAIIHandleConstructorArguments( handle, handle.second.destructorIt, false, true );
+  auto [constructorArguments, forwardArguments] = generateRAIIHandleConstructorArguments( handle, handle.second.destructorIt, false, true );
   std::string initializationList   = generateRAIIHandleConstructorInitializationList( handle, handle.second.destructorIt, handle.second.destructorIt, true );
   assert( !handle.second.constructorIts.empty() );
   if ( 1 < handle.second.constructorIts[0]->second.successCodes.size() && ( handle.second.constructorIts[0]->second.successCodes[1] != "VK_INCOMPLETE" ) )
@@ -7971,14 +7891,18 @@ ${enter}
       }
       else
       {
+#ifdef VULKAN_HPP_NO_EXCEPTIONS
         return VULKAN_HPP_NAMESPACE::Unexpected(result);
+#else
+        throwResultException( result, "${constructorCall}" );
+#endif
       }
     }
 ${leave})";
 
   return replaceWithMap( constructorTemplate,
                          { { "callArguments", generateRAIIHandleConstructorCallArguments( handle, constructorIt, false, {}, false, true ) },
-                           { "staticCreateArguments", generateRAIIHandleConstructorArguments( handle, constructorIt, false, false ) },
+                           { "staticCreateArguments", generateRAIIHandleConstructorArguments( handle, constructorIt, false, false ).first },
                            { "constructorCall", constructorIt->first },
                            { "debugHelper", debugHelper },
                            { "enter", enter },
@@ -7996,41 +7920,11 @@ ${leave})";
 
 std::string VulkanHppGenerator::generateRAIIHandleConstructorVector( std::pair<std::string, HandleData> const &                             handle,
                                                                      std::map<std::string, VulkanHppGenerator::CommandData>::const_iterator constructorIt,
-                                                                     std::vector<ParamData>::const_iterator                                 handleParamIt,
                                                                      std::string const &                                                    enter,
                                                                      std::string const &                                                    leave ) const
 {
-  std::string vectorSize;
-  auto        lenIt = std::find_if( constructorIt->second.params.begin(),
-                             constructorIt->second.params.end(),
-                             [&handleParamIt]( ParamData const & pd ) { return pd.name == handleParamIt->len; } );
-  if ( lenIt == constructorIt->second.params.end() )
-  {
-    std::vector<std::string> lenParts = tokenize( handleParamIt->len, "->" );
-    assert( lenParts.size() == 2 );
-    lenIt = std::find_if(
-      constructorIt->second.params.begin(), constructorIt->second.params.end(), [&lenParts]( ParamData const & pd ) { return pd.name == lenParts[0]; } );
-#if !defined( NDEBUG )
-    assert( lenIt != constructorIt->second.params.end() );
-    auto structureIt = m_structures.find( lenIt->type.type );
-    assert( structureIt != m_structures.end() );
-    assert( isStructMember( lenParts[1], structureIt->second.members ) );
-    assert( constructorIt->second.successCodes.size() == 1 );
-#endif
-    vectorSize = startLowerCase( stripPrefix( lenParts[0], "p" ) ) + "." + lenParts[1];
-  }
-  else
-  {
-    auto arrayIt = std::find_if( constructorIt->second.params.begin(),
-                                 constructorIt->second.params.end(),
-                                 [&lenIt, &handleParamIt]( ParamData const & pd ) { return ( pd.len == lenIt->name ) && ( pd.name != handleParamIt->name ); } );
-    assert( arrayIt != constructorIt->second.params.end() );
-    vectorSize = startLowerCase( stripPrefix( arrayIt->name, "p" ) ) + ".size()";
-  }
-
-  std::string handleConstructorArguments = generateRAIIHandleSingularConstructorArguments( handle, constructorIt );
   std::string handleType                 = stripPrefix( handle.first, "Vk" );
-  std::string successCodePassToElement   = ( 1 < constructorIt->second.successCodes.size() ) ? ", result" : "";
+  auto [constructorArguments, forwardArguments] = generateRAIIHandleConstructorArguments( handle, constructorIt, false, false );
 
   std::string debugHelper = "";
   #ifdef DEBUG_GENERATOR
@@ -8042,42 +7936,18 @@ std::string VulkanHppGenerator::generateRAIIHandleConstructorVector( std::pair<s
 ${enter}
 #ifndef VULKAN_HPP_NO_EXCEPTIONS
     ${handleType}s( ${constructorArguments} ) ${debugHelper}
-    {
-      VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::DeviceDispatcher const * dispatcher = ${parentName}.getDispatcher();
-      std::vector<${vectorElementType}> ${vectorName}( ${vectorSize} );
-      VULKAN_HPP_NAMESPACE::Result result = static_cast<VULKAN_HPP_NAMESPACE::Result>( dispatcher->${constructorCall}( ${callArguments} ) );
-      if ( ${successCheck} )
-      {
-        this->reserve( ${vectorSize} );
-        for ( auto const & ${handleName} : ${vectorName} )
-        {
-          this->emplace_back( ${parentName}, ${handleConstructorArguments}${successCodePassToElement} );
-        }
-      }
-      else
-      {
-        throwResultException( result, "${constructorCall}" );
-      }
-    }
+    : ${handleType}s ( create( ${forwardArguments} ) ) { }
 #endif
 ${leave})";
 
   return replaceWithMap( constructorTemplate,
-                         { { "callArguments", generateRAIIHandleConstructorCallArguments( handle, constructorIt, false, {}, false, true ) },
-                           { "constructorArguments", generateRAIIHandleConstructorArguments( handle, constructorIt, false, false ) },
-                           { "constructorCall", constructorIt->first },
-                           { "debugHelper", debugHelper },
-                           { "enter", enter },
-                           { "handleConstructorArguments", handleConstructorArguments },
-                           { "handleName", startLowerCase( handleType ) },
-                           { "handleType", handleType },
-                           { "leave", leave },
-                           { "parentName", constructorIt->second.params.front().name },
-                           { "successCheck", generateSuccessCheck( constructorIt->second.successCodes ) },
-                           { "successCodePassToElement", successCodePassToElement },
-                           { "vectorElementType", handleParamIt->type.type },
-                           { "vectorName", startLowerCase( stripPrefix( handleParamIt->name, "p" ) ) },
-                           { "vectorSize", vectorSize } } );
+                        {
+                          { "constructorArguments", constructorArguments},
+                          { "debugHelper", debugHelper },
+                          { "enter", enter },
+                          { "forwardArguments", forwardArguments },
+                          { "handleType", handleType },
+                          { "leave", leave } } );
 }
 
 std::string
@@ -8116,7 +7986,11 @@ ${enter}
       VULKAN_HPP_NAMESPACE::Result result = static_cast<VULKAN_HPP_NAMESPACE::Result>( ${getDispatcher}->${constructorCall}( ${callArguments} ) );
       if ( ${failureCheck} )
       {
+#ifdef VULKAN_HPP_NO_EXCEPTIONS
         return VULKAN_HPP_NAMESPACE::Unexpected(result);
+#else
+        throwResultException( result, "${constructorCall}" );
+#endif
       }
       return VULKAN_HPP_NAMESPACE::Expected(std::move( ${handleType}( ${callConstructorArguments} )));
     }
@@ -8125,7 +7999,7 @@ ${leave})";
   return replaceWithMap( singularConstructorTemplate,
                          { { "callArguments", callArguments },
                            { "callConstructorArguments", callConstructorArguments },
-                           { "staticCreateArguments", generateRAIIHandleConstructorArguments( handle, constructorIt, true, false ) },
+                           { "staticCreateArguments", generateRAIIHandleConstructorArguments( handle, constructorIt, true, false ).first },
                            { "constructorCall", constructorIt->first },
                            { "debugHelper", debugHelper },
                            { "enter", enter },
@@ -8140,52 +8014,33 @@ ${leave})";
 std::string
   VulkanHppGenerator::generateRAIIHandleConstructorVectorSingular( std::pair<std::string, HandleData> const &                             handle,
                                                                    std::map<std::string, VulkanHppGenerator::CommandData>::const_iterator constructorIt,
-                                                                   std::vector<ParamData>::const_iterator                                 handleParamIt,
                                                                    std::string const &                                                    enter,
                                                                    std::string const &                                                    leave ) const
 {
-  size_t                            returnParam    = static_cast<size_t>( std::distance( constructorIt->second.params.begin(), handleParamIt ) );
-  std::map<size_t, VectorParamData> vectorParams   = determineVectorParams( constructorIt->second.params );
-  std::set<size_t>                  singularParams = determineSingularParams( returnParam, vectorParams );
-
-  std::string callArguments      = generateRAIIHandleConstructorCallArguments( handle, constructorIt, false, singularParams, true, true );
-  std::string initializationList = generateRAIIHandleConstructorInitializationList( handle, constructorIt, handle.second.destructorIt, false );
-  assert( !initializationList.empty() );
-  std::string failureCheck = generateFailureCheck( constructorIt->second.successCodes );
-  failureCheck             = std::regex_replace( failureCheck, std::regex( "result" ), "m_constructorSuccessCode" );
-
   std::string debugHelper = "";
   #ifdef DEBUG_GENERATOR
   debugHelper = "/*" + std::string(__FUNCTION__) + "*/";
   #endif
+
+  auto [constructorArguments, forwardArguments] = generateRAIIHandleConstructorArguments( handle, constructorIt, true, false );
 
   const std::string singularConstructorTemplate =
     R"(
 ${enter}
 #ifndef VULKAN_HPP_NO_EXCEPTIONS
     ${handleType}( ${constructorArguments} ) ${debugHelper}
-      : ${initializationList}, m_dispatcher( ${firstArgument}.getDispatcher() )
-    {
-      m_constructorSuccessCode = static_cast<VULKAN_HPP_NAMESPACE::Result>( getDispatcher()->${constructorCall}( ${callArguments} ) );
-      if ( ${failureCheck} )
-      {
-        throwResultException( m_constructorSuccessCode, "${constructorCall}" );
-      }
-    }
+      : ${handleType} ( create( ${forwardArguments} ) )
+
 #endif
 ${leave})";
 
   return replaceWithMap( singularConstructorTemplate,
-                         { { "initializationList", initializationList },
-                           { "callArguments", callArguments },
-                           { "constructorArguments", generateRAIIHandleConstructorArguments( handle, constructorIt, true, false ) },
-                           { "constructorCall", constructorIt->first },
+                         { { "constructorArguments", constructorArguments },
                            { "debugHelper", debugHelper },
                            { "enter", enter },
-                           { "firstArgument", constructorIt->second.params[0].name },
-                           { "failureCheck", failureCheck },
-                           { "leave", leave },
-                           { "handleType", stripPrefix( handle.first, "Vk" ) } } );
+                           { "forwardArguments", forwardArguments },
+                           { "handleType", stripPrefix( handle.first, "Vk" ) },
+                           { "leave", leave } } );
 }
 
 std::pair<std::string, std::string> VulkanHppGenerator::generateRAIIHandleConstructorVoid( std::pair<std::string, HandleData> const &         handle,
@@ -8214,7 +8069,7 @@ std::string
                                                                        std::string const &                                                    leave ) const
 {
   std::string callArguments        = generateRAIIHandleConstructorCallArguments( handle, constructorIt, false, {}, true, true );
-  std::string constructorArguments = generateRAIIHandleConstructorArguments( handle, constructorIt, false, false );
+  std::string constructorArguments = generateRAIIHandleConstructorArguments( handle, constructorIt, false, false ).first;
   std::string initializationList   = generateRAIIHandleConstructorInitializationList( handle, constructorIt, handle.second.destructorIt, false );
   if ( !initializationList.empty() )
   {
