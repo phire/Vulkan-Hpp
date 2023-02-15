@@ -873,7 +873,7 @@ private:
                                                  std::set<size_t> const &                      skippedParams ) const;
   std::string generateResultAssignment( CommandData const & commandData ) const;
   std::string generateResultCheck(
-    CommandData const & commandData, std::string const & className, std::string const & classSeparator, std::string commandName, bool enumerating ) const;
+    CommandData const & commandData, std::string const & className, std::string const & classSeparator, std::string commandName, bool enumerating, bool raii) const;
   std::string generateResultExceptions() const;
   std::string generateReturnStatement( std::string const & commandName,
                                        CommandData const & commandData,

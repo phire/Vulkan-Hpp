@@ -42,10 +42,10 @@ public:
     using unexpected_type = Unexpected;
 
 // constructors
-    explicit Expected(const Expected& e) = delete;
-    VULKAN_HPP_CONSTEXPR Expected(Expected&& e) VULKAN_HPP_NOEXCEPT = default;
-    template<class U>
-    VULKAN_HPP_CONSTEXPR Expected(Expected<U>&& e) : has_val(e.has_value())
+    VULKAN_HPP_CONSTEXPR Expected(const Expected& e) VULKAN_HPP_NOEXCEPT = default;
+
+    template<class U, typename std::enable_if<std::is_convertible<U, T>::value, bool>::type = true>
+    VULKAN_HPP_CONSTEXPR_14 Expected(Expected<U>&& e) VULKAN_HPP_NOEXCEPT : has_val(e.has_value())
     {
         if (has_val)
             val = std::move(e.value());
@@ -53,9 +53,10 @@ public:
             result = e.error();
     }
     VULKAN_HPP_CONSTEXPR Expected(const Unexpected&& u) VULKAN_HPP_NOEXCEPT : has_val(false), result(u.error()) {}
-    VULKAN_HPP_CONSTEXPR explicit Expected(T&& v) VULKAN_HPP_NOEXCEPT : val(std::move(v)) {}
 
-    VULKAN_HPP_CONSTEXPR ~Expected() VULKAN_HPP_NOEXCEPT { if (has_val) val.~T(); }
+    VULKAN_HPP_CONSTEXPR Expected(T&& v) VULKAN_HPP_NOEXCEPT : val(std::move(v)) {}
+
+    VULKAN_HPP_CONSTEXPR_14 ~Expected() VULKAN_HPP_NOEXCEPT { if (has_val) val.~T(); }
 
 // assignment
     VULKAN_HPP_CONSTEXPR_14 Expected& operator=(Expected&& e) VULKAN_HPP_NOEXCEPT = default;
@@ -134,11 +135,12 @@ VULKAN_HPP_CONSTEXPR_14 void swap(Expected<T>& x, Expected<T>& y) VULKAN_HPP_NOE
     using unexpected_type = Unexpected;
 
     // constructors
-    explicit Expected( const Expected & e )                            = delete;
+    VULKAN_HPP_CONSTEXPR Expected() VULKAN_HPP_NOEXCEPT = default;
+    VULKAN_HPP_CONSTEXPR Expected( const Expected & e )                = default;
     VULKAN_HPP_CONSTEXPR Expected( Expected && e ) VULKAN_HPP_NOEXCEPT = default;
 
     template <class U>
-    VULKAN_HPP_CONSTEXPR Expected( Expected<U> && e )
+    VULKAN_HPP_CONSTEXPR_14 Expected( Expected<U> && e )
     {
       if ( e.has_val() )
         result = Result::eSuccess;

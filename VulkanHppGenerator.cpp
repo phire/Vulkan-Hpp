@@ -25,7 +25,7 @@
 
 // Uncomment to generate function definitions with cpp comment saying
 // which function generated it.
-//#define DEBUG_GENERATOR 1
+#define DEBUG_GENERATOR 1
 
 void                                checkAttributes( int                                                  line,
                                                      std::map<std::string, std::string> const &           attributes,
@@ -2953,7 +2953,7 @@ std::string VulkanHppGenerator::generateCommandEnhanced( std::string const &    
     std::string dataSizeChecks = generateDataSizeChecks( commandData, returnParams, dataTypes, vectorParams, templatedParams, singular );
     std::string callSequence =
       generateCallSequence( name, commandData, returnParams, vectorParams, initialSkipCount, singularParams, templatedParams, flavourFlags, false );
-    std::string resultCheck     = generateResultCheck( commandData, className, classSeparator, commandName, enumerating );
+    std::string resultCheck     = generateResultCheck( commandData, className, classSeparator, commandName, enumerating, false );
     std::string returnStatement = generateReturnStatement( name,
                                                            commandData,
                                                            returnVariable,
@@ -6621,7 +6621,7 @@ std::string VulkanHppGenerator::generateRAIIHandleCommandEnhanced( std::string c
     commandData.params, returnParams, vectorParams, skippedParams, singularParams, templatedParams, definition, flavourFlags, false );
   std::string commandName = generateCommandName( name, commandData.params, initialSkipCount, m_tags, flavourFlags );
   std::string nodiscard   = generateNoDiscard(
-    !returnParams.empty() || ( ( commandData.returnType != "VkResult" ) && ( commandData.returnType != "void" ) ), 1 < commandData.successCodes.size(), false );
+    !returnParams.empty() || ( ( commandData.returnType != "VkResult" ) && ( commandData.returnType != "void" ) ), 1 < commandData.successCodes.size(), 1 < commandData.errorCodes.size() );
   std::pair<bool, std::map<size_t, std::vector<size_t>>> vectorSizeCheck =
     needsVectorSizeCheck( commandData.params, vectorParams, returnParams, singularParams );
   std::string noexceptString = generateNoExcept( commandData.errorCodes, returnParams, vectorParams, flavourFlags, vectorSizeCheck.first, true );
@@ -6659,7 +6659,7 @@ ${vectorSizeCheck}
     std::string dataPreparation =
       generateDataPreparation( commandData, initialSkipCount, returnParams, vectorParams, templatedParams, flavourFlags, enumerating );
     std::string dataSizeChecks  = generateDataSizeChecks( commandData, returnParams, dataTypes, vectorParams, templatedParams, singular );
-    std::string resultCheck     = generateResultCheck( commandData, className, "::", commandName, enumerating );
+    std::string resultCheck     = generateResultCheck( commandData, className, "::", commandName, enumerating, true );
     std::string returnStatement = generateReturnStatement( name,
                                                            commandData,
                                                            returnVariable,
@@ -8605,7 +8605,7 @@ std::string VulkanHppGenerator::generateResultAssignment( CommandData const & co
 }
 
 std::string VulkanHppGenerator::generateResultCheck(
-  CommandData const & commandData, std::string const & className, std::string const & classSeparator, std::string commandName, bool enumerating ) const
+  CommandData const & commandData, std::string const & className, std::string const & classSeparator, std::string commandName, bool enumerating, bool raii ) const
 {
   std::string resultCheck;
   if ( !commandData.errorCodes.empty() )
@@ -8615,9 +8615,30 @@ std::string VulkanHppGenerator::generateResultCheck(
     std::string const resultCheckTemplate =
       R"(resultCheck( static_cast<VULKAN_HPP_NAMESPACE::Result>( result ), VULKAN_HPP_NAMESPACE_STRING "::${className}${classSeparator}${commandName}"${successCodeList} );)";
 
+
     resultCheck = replaceWithMap(
       resultCheckTemplate,
       { { "className", className }, { "classSeparator", classSeparator }, { "commandName", commandName }, { "successCodeList", successCodeList } } );
+
+    if ( raii )
+    {
+      std::string failureCondition = " result_hpp != Result::eSuccess";
+
+      std::string raiiResultCheckTemplate = R"(
+#ifdef VULKAN_HPP_NO_EXCEPTIONS
+  if ( resultIsSuccess( static_cast<VULKAN_HPP_NAMESPACE::Result>( result )${successCodeList}) )
+  {
+    return VULKAN_HPP_NAMESPACE::Unexpected( static_cast<VULKAN_HPP_NAMESPACE::Result>( result ) );
+  }
+#else
+  ${resultCheck}
+#endif)";
+
+      resultCheck = replaceWithMap( raiiResultCheckTemplate,
+          {
+             { "resultCheck", resultCheck },
+             { "successCodeList", successCodeList } } );
+    }
   }
   return resultCheck;
 }
@@ -8674,11 +8695,23 @@ std::string VulkanHppGenerator::generateReturnStatement( std::string const & com
     if ( ( commandData.successCodes.size() == 1 ) || enumerating )
     {
       assert( commandData.successCodes[0] == "VK_SUCCESS" );
-      if ( raii || commandData.errorCodes.empty() )
+      if ( commandData.errorCodes.empty() )
       {
         if ( !returnVariable.empty() )
         {
-          returnStatement = "return " + returnVariable + ";";
+          returnStatement = "return " + returnVariable + " ;";
+        }
+      }
+      else if ( raii )
+      {
+        if ( returnVariable.empty() )
+        {
+
+          returnStatement = "return VULKAN_HPP_NAMESPACE::Expected<void>();";
+        }
+        else
+        {
+          returnStatement = "return VULKAN_HPP_NAMESPACE::Expected( std::move( " + returnVariable + " ) );";
         }
       }
       else
@@ -8714,7 +8747,7 @@ std::string VulkanHppGenerator::generateReturnStatement( std::string const & com
       if ( returnVariable.empty() )
       {
         assert( !unique );
-        returnStatement = "return static_cast<VULKAN_HPP_NAMESPACE::" + stripPrefix( commandData.returnType, "Vk" ) + ">( result );";
+        returnStatement = "return static_cast<VULKAN_HPP_NAMESPACE::" + stripPrefix( commandData.returnType, "Vk" ) + ">( result ); // foo";
       }
       else if ( unique )
       {
@@ -8734,7 +8767,7 @@ std::string VulkanHppGenerator::generateReturnStatement( std::string const & com
       }
       else
       {
-        assert( returnType.starts_with( raii ? "std::pair<VULKAN_HPP_NAMESPACE::Result, " : "ResultValue<" ) && returnType.ends_with( ">" ) );
+        assert( returnType.starts_with( raii ? "VULKAN_HPP_NAMESPACE::Expected<std::pair<VULKAN_HPP_NAMESPACE::Result, " : "ResultValue<" ) && returnType.ends_with( ">" ) );
         returnStatement =
           "return " + ( raii ? "std::make_pair" : returnType ) + "( static_cast<VULKAN_HPP_NAMESPACE::Result>( result ), " + returnVariable + " );";
       }
@@ -8745,14 +8778,25 @@ std::string VulkanHppGenerator::generateReturnStatement( std::string const & com
     assert( !unique );
     if ( returnVariable.empty() )
     {
-      if ( commandData.returnType != "void" )
+      if ( commandData.returnType == "VULKAN_HPP_NAMESPACE::Expected<void>" )
+      {
+        returnStatement = "return VULKAN_HPP_NAMESPACE::Expected<void>();";
+      }
+      else if ( commandData.returnType != "void" )
       {
         returnStatement = "return result;";
       }
     }
     else
     {
-      returnStatement = "return " + returnVariable + ";";
+      if ( commandData.returnType.starts_with("VULKAN_HPP_NAMESPACE::Expected") )
+      {
+        returnStatement = "return std::move(" + returnVariable + ");";
+      }
+      else
+      {
+        returnStatement = "return " + returnVariable + "; // " + commandData.returnType ;
+      }
     }
   }
   return returnStatement;
@@ -8802,6 +8846,10 @@ std::string VulkanHppGenerator::generateReturnType( CommandData const &         
   {
     assert( ( commandData.returnType == "VkResult" ) && !unique );
     returnType = "VULKAN_HPP_NAMESPACE::Result";
+    if ( raii && !commandData.errorCodes.empty() )
+    {
+      returnType = "VULKAN_HPP_NAMESPACE::Expected<" + returnType + ">";
+    }
   }
   else if ( ( commandData.returnType != "VkResult" ) && ( commandData.returnType != "void" ) )
   {
@@ -8816,7 +8864,7 @@ std::string VulkanHppGenerator::generateReturnType( CommandData const &         
     }
   }
   else if ( ( commandData.returnType == "void" ) ||
-            ( ( commandData.returnType == "VkResult" ) && ( commandData.successCodes.size() == 1 ) && ( commandData.errorCodes.empty() || raii ) ) )
+            ( ( commandData.returnType == "VkResult" ) && ( commandData.successCodes.size() == 1 ) && ( commandData.errorCodes.empty() ) ) )
   {
     assert( !unique );
     assert( ( commandData.returnType != "void" ) || ( returnParams.size() <= 2 ) );
@@ -8829,14 +8877,34 @@ std::string VulkanHppGenerator::generateReturnType( CommandData const &         
     if ( ( 1 < commandData.successCodes.size() ) && ( ( returnParams.size() == 1 ) || ( ( returnParams.size() == 2 ) && vectorParams.empty() ) ) )
     {
       assert( !commandData.errorCodes.empty() );
-      returnType = ( raii ? "std::pair<VULKAN_HPP_NAMESPACE::Result, " : "ResultValue<" ) + modifiedDataType + ">";
+      if (raii)
+      {
+        returnType = "VULKAN_HPP_NAMESPACE::Expected<std::pair<VULKAN_HPP_NAMESPACE::Result, " + modifiedDataType + ">>";
+      }
+      else
+      {
+        returnType = "ResultValue<" + modifiedDataType + ">";
+      }
     }
     else
     {
       assert(
         ( ( commandData.successCodes.size() == 1 ) || ( ( commandData.successCodes.size() == 2 ) && ( commandData.successCodes[1] == "VK_INCOMPLETE" ) ) ) &&
         ( returnParams.size() <= 3 ) );
-      returnType = raii ? modifiedDataType : ( "typename ResultValueType<" + modifiedDataType + ">::type" );
+      if (raii)
+      {
+        if ( !commandData.errorCodes.empty() )
+        {
+          returnType = "VULKAN_HPP_NAMESPACE::Expected<" + modifiedDataType + ">";
+        }
+        else {
+          returnType = modifiedDataType;
+        }
+      }
+      else
+      {
+        returnType = "typename ResultValueType<" + modifiedDataType + ">::type";
+      }
     }
   }
   return returnType;
