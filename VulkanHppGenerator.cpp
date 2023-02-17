@@ -7202,7 +7202,7 @@ std::string VulkanHppGenerator::generateRAIIHandleStaticCreateEnumerate( std::pa
   const std::string constructorTemplate =
     R"(
 ${enter}
-    static VULKAN_HPP_NAMESPACE::Expected<${handleType}s> create( ${constructorArguments} ) ${debugHelper}
+    static VULKAN_HPP_NAMESPACE::Expected<std::vector<${handleType}>> create( ${constructorArguments} ) ${debugHelper}
     {
       ${dispatcherType} const * dispatcher = ${parentName}.getDispatcher();
       std::vector<${vectorElementType}> ${vectorName};
@@ -7225,13 +7225,13 @@ ${enter}
         throwResultException( result, "${constructorCall}" );
 #endif
       }
-      ${handleType}s ret(nullptr);
+      std::vector<${handleType}> ret;
       ret.reserve( ${counterName} );
       for ( auto const & ${handleName} : ${vectorName} )
       {
         ret.emplace_back( ${parentName}, ${handleConstructorArguments} );
       }
-      return VULKAN_HPP_NAMESPACE::Expected( std::move(ret) );
+      return std::move(ret);
     }
 ${leave})";
 
@@ -7874,7 +7874,7 @@ std::string VulkanHppGenerator::generateRAIIHandleStaticCreateVector( std::pair<
   const std::string constructorTemplate =
     R"(
 ${enter}
-    static VULKAN_HPP_NAMESPACE::Expected<${handleType}s> create( ${staticCreateArguments} ) ${debugHelper}
+    static VULKAN_HPP_NAMESPACE::Expected<std::vector<${handleType}>> create( ${staticCreateArguments} ) ${debugHelper}
     {
       VULKAN_HPP_NAMESPACE::VULKAN_HPP_RAII_NAMESPACE::DeviceDispatcher const * dispatcher = ${parentName}.getDispatcher();
       std::vector<${vectorElementType}> ${vectorName}( ${vectorSize} );
@@ -7887,7 +7887,7 @@ ${enter}
         {
           ret.emplace_back( ${parentName}, ${handleConstructorArguments}${successCodePassToElement} );
         }
-        return VULKAN_HPP_NAMESPACE::Expected(std::move(ret));
+        return std::move(ret);
       }
       else
       {
