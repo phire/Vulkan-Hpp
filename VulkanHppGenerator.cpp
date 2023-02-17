@@ -8626,7 +8626,7 @@ std::string VulkanHppGenerator::generateResultCheck(
 
       std::string raiiResultCheckTemplate = R"(
 #ifdef VULKAN_HPP_NO_EXCEPTIONS
-  if ( resultIsSuccess( static_cast<VULKAN_HPP_NAMESPACE::Result>( result )${successCodeList}) )
+  if ( !resultIsSuccess( static_cast<VULKAN_HPP_NAMESPACE::Result>( result )${successCodeList}) )
   {
     return VULKAN_HPP_NAMESPACE::Unexpected( static_cast<VULKAN_HPP_NAMESPACE::Result>( result ) );
   }

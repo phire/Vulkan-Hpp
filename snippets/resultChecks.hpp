@@ -16,7 +16,7 @@
     ignore( message );
     VULKAN_HPP_ASSERT_ON_RESULT( result == Result::eSuccess );
 #else
-    if ( resultIsSuccess(result) )
+    if ( !resultIsSuccess(result) )
     {
       throwResultException( result, message );
     }
@@ -31,7 +31,7 @@
     ignore( successCodes );  // just in case VULKAN_HPP_ASSERT_ON_RESULT is empty
     VULKAN_HPP_ASSERT_ON_RESULT( resultIsSuccess(result, successCodes) );
 #else
-    if ( resultIsSuccess(result, successCodes) )
+    if ( !resultIsSuccess(result, successCodes) )
     {
       throwResultException( result, message );
     }
