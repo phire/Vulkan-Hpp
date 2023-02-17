@@ -60,10 +60,16 @@
 #  else
 #    define VULKAN_HPP_CONSTEXPR_14
 #  endif
+#  if __cpp_constexpr >= 202002L
+#    define VULKAN_HPP_CONSTEXPR_20 constexpr
+#  else
+#    define VULKAN_HPP_CONSTEXPR_20
+#  endif
 #  define VULKAN_HPP_CONST_OR_CONSTEXPR constexpr
 #else
 #  define VULKAN_HPP_CONSTEXPR
 #  define VULKAN_HPP_CONSTEXPR_14
+#  define VULKAN_HPP_CONSTEXPR_20
 #  define VULKAN_HPP_CONST_OR_CONSTEXPR const
 #endif
 

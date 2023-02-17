@@ -56,16 +56,48 @@ public:
 
     VULKAN_HPP_CONSTEXPR Expected(T&& v) VULKAN_HPP_NOEXCEPT : val(std::move(v)) {}
 
-    VULKAN_HPP_CONSTEXPR_14 ~Expected() VULKAN_HPP_NOEXCEPT { if (has_val) val.~T(); }
+    VULKAN_HPP_CONSTEXPR_20 ~Expected() VULKAN_HPP_NOEXCEPT { if (has_val) val.~T(); }
 
 // assignment
-    VULKAN_HPP_CONSTEXPR_14 Expected& operator=(Expected&& e) VULKAN_HPP_NOEXCEPT = default;
+    VULKAN_HPP_CONSTEXPR_14 Expected& operator=(Expected&& e) VULKAN_HPP_NOEXCEPT
+    {
+      if ( has_val )
+        val.~T();
+
+      has_val = e.has_value();
+      if ( has_val )
+        val = std::move( e.value() );
+      else
+        result = e.error();
+
+      return *this;
+    }
 
 // swap
     VULKAN_HPP_CONSTEXPR_14 void swap(Expected& other) VULKAN_HPP_NOEXCEPT
     {
-        std::swap(result, other.result);
-        std::swap(val, other.val);
+        if (has_val && other.has_val)
+        {
+            std::swap(val, other.val);
+        }
+        else if (!has_val && !other.has_val)
+        {
+            std::swap(result, other.result);
+        }
+        else if (has_val)
+        {
+            vk::Result temp = other.result;
+            other.val = std::move(val);
+            std::swap(has_val, other.has_val);
+            result = temp;
+        }
+        else
+        {
+            vk::Result temp = result;
+            val = std::move(other.val);
+            std::swap(has_val, other.has_val);
+            other.result = temp;
+        }
     }
 
 // observers
@@ -80,11 +112,31 @@ public:
         VULKAN_HPP_ASSERT_ON_RESULT(has_value());
         return val;
     }
-    VULKAN_HPP_CONSTEXPR_14 T&& value() && VULKAN_HPP_NOEXCEPT { return std::move(value()); }
-    VULKAN_HPP_CONSTEXPR_14 const Result& error() const VULKAN_HPP_NOEXCEPT
+    VULKAN_HPP_CONSTEXPR_14 T&& value() && VULKAN_HPP_NOEXCEPT
+    {
+        VULKAN_HPP_ASSERT_ON_RESULT(has_value());
+        return std::move(value());
+    }
+
+    VULKAN_HPP_CONSTEXPR_14 Result& error() & VULKAN_HPP_NOEXCEPT
     {
         VULKAN_HPP_ASSERT(!has_value());
         return result;
+    }
+    VULKAN_HPP_CONSTEXPR_14 const Result& error() const& VULKAN_HPP_NOEXCEPT
+    {
+        VULKAN_HPP_ASSERT(!has_value());
+        return result;
+    }
+    VULKAN_HPP_CONSTEXPR_14 Result&& error() && VULKAN_HPP_NOEXCEPT
+    {
+        VULKAN_HPP_ASSERT(!has_value());
+        return std::move(result);
+    }
+    VULKAN_HPP_CONSTEXPR_14 const Result&& error() const&& VULKAN_HPP_NOEXCEPT
+    {
+        VULKAN_HPP_ASSERT(!has_value());
+        return std::move(result);
     }
 
     VULKAN_HPP_CONSTEXPR const T* operator->() const VULKAN_HPP_NOEXCEPT { return &value(); }
@@ -96,10 +148,18 @@ public:
     VULKAN_HPP_CONSTEXPR explicit operator bool() const VULKAN_HPP_NOEXCEPT { return has_value(); }
 
     template<class U>
-    VULKAN_HPP_CONSTEXPR_14 T value_or(U&& u) && VULKAN_HPP_NOEXCEPT
+    VULKAN_HPP_CONSTEXPR_14 T value_or(U&& u) const& VULKAN_HPP_NOEXCEPT
     {
         if (has_value())
             return val;
+        return static_cast<T>(std::forward<U>(u));
+    }
+
+    template<class U>
+    VULKAN_HPP_CONSTEXPR_14 T value_or(U&& u) && VULKAN_HPP_NOEXCEPT
+    {
+        if (has_value())
+            return std::move(val);
         return static_cast<T>(std::forward<U>(u));
     }
 // equality
