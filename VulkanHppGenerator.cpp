@@ -25,7 +25,7 @@
 
 // Uncomment to generate function definitions with cpp comment saying
 // which function generated it.
-#define DEBUG_GENERATOR 1
+// #define DEBUG_GENERATOR 1
 
 void                                checkAttributes( int                                                  line,
                                                      std::map<std::string, std::string> const &           attributes,
@@ -7231,7 +7231,7 @@ ${enter}
       {
         ret.emplace_back( ${parentName}, ${handleConstructorArguments} );
       }
-      return std::move(ret);
+      return ret;
     }
 ${leave})";
 
@@ -7730,7 +7730,7 @@ ${enter}
         throwResultException( result, "${constructorCall}" );
 #endif
       }
-      return VULKAN_HPP_NAMESPACE::Expected(std::move( ${handleType} ( ${callConstructorArguments} )));
+      return ${handleType} ( ${callConstructorArguments} );
     }
 ${leave})";
 
@@ -7887,7 +7887,7 @@ ${enter}
         {
           ret.emplace_back( ${parentName}, ${handleConstructorArguments}${successCodePassToElement} );
         }
-        return std::move(ret);
+        return ret;
       }
       else
       {
@@ -7992,7 +7992,7 @@ ${enter}
         throwResultException( result, "${constructorCall}" );
 #endif
       }
-      return VULKAN_HPP_NAMESPACE::Expected(std::move( ${handleType}( ${callConstructorArguments} )));
+      return ${handleType}( ${callConstructorArguments} );
     }
 ${leave})";
 
@@ -8711,7 +8711,7 @@ std::string VulkanHppGenerator::generateReturnStatement( std::string const & com
         }
         else
         {
-          returnStatement = "return VULKAN_HPP_NAMESPACE::Expected( std::move( " + returnVariable + " ) );";
+          returnStatement = "return " + returnVariable + ";";
         }
       }
       else
@@ -8747,7 +8747,7 @@ std::string VulkanHppGenerator::generateReturnStatement( std::string const & com
       if ( returnVariable.empty() )
       {
         assert( !unique );
-        returnStatement = "return static_cast<VULKAN_HPP_NAMESPACE::" + stripPrefix( commandData.returnType, "Vk" ) + ">( result ); // foo";
+        returnStatement = "return static_cast<VULKAN_HPP_NAMESPACE::" + stripPrefix( commandData.returnType, "Vk" ) + ">( result );";
       }
       else if ( unique )
       {
@@ -8789,14 +8789,7 @@ std::string VulkanHppGenerator::generateReturnStatement( std::string const & com
     }
     else
     {
-      if ( commandData.returnType.starts_with("VULKAN_HPP_NAMESPACE::Expected") )
-      {
-        returnStatement = "return std::move(" + returnVariable + ");";
-      }
-      else
-      {
-        returnStatement = "return " + returnVariable + "; // " + commandData.returnType ;
-      }
+      returnStatement = "return " + returnVariable + ";";
     }
   }
   return returnStatement;
